@@ -1,99 +1,200 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
-        <meta name="mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <link rel="stylesheet" href="css/leaflet.css">
-        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
-        <link rel="stylesheet" href="css/L.Control.Locate.min.css">
-        <link rel="stylesheet" href="css/qgis2web.css">
-        <link rel="stylesheet" href="css/fontawesome-all.min.css">
-        <link rel="stylesheet" href="css/leaflet.photon.css">
-        <link rel="stylesheet" href="css/leaflet-measure.css">
-        <style>
-        html, body, #map {
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+    <link rel="stylesheet" href="css/leaflet.css">
+    <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+    <link rel="stylesheet" href="css/L.Control.Locate.min.css">
+    <link rel="stylesheet" href="css/qgis2web.css">
+    <link rel="stylesheet" href="css/fontawesome-all.min.css">
+    <link rel="stylesheet" href="css/leaflet.photon.css">
+    <link rel="stylesheet" href="css/leaflet-measure.css">
+
+    <style>
+        html,
+        body,
+        #map {
             width: 100%;
             height: 100%;
             padding: 0;
             margin: 0;
         }
-        </style>
-        <title>LINCZ Project: Binga fieldwork</title>
-    </head>
-    <body>
-        <script>
-          // Basic login check before loading map
-          const username = prompt("Please enter username:");
-          const password = prompt("Please enter password:");
 
-          if (username !== "lincz" || password !== "lincz2025") {
-            alert("Access denied: Invalid username or password.");
-            // Remove everything from the body so map doesn't load
-            document.body.innerHTML = "<h1>Access denied</h1>";
-            // Stop script execution
-            throw new Error("Invalid login");
-          }
-          // If credentials OK, map will load normally below
-        </script>
+        /* --- TELA DE LOGIN PERSONALIZADA --- */
+        #loginScreen {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #f5f5f5;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            z-index: 9999;
+        }
 
-        <div id="map">
+        #loginBox {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+            width: 320px;
+            text-align: center;
+        }
+
+        #loginBox h2 {
+            margin-bottom: 1.2rem;
+            color: #333;
+        }
+
+        #loginBox input {
+            width: 100%;
+            padding: 0.6rem;
+            margin-bottom: 0.8rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        #loginBox button {
+            width: 100%;
+            padding: 0.7rem;
+            background: #2c7be5;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        #loginBox button:hover {
+            background: #1a5bb8;
+        }
+
+        #errorMsg {
+            color: red;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+    </style>
+
+    <title>LINCZ Project: Binga fieldwork</title>
+</head>
+
+<body>
+    <!-- TELA DE LOGIN -->
+    <div id="loginScreen">
+        <div id="loginBox">
+            <h2>🔑 Restricted Access</h2>
+            <input type="text" id="user" placeholder="Username" autocomplete="username">
+            <input type="password" id="pass" placeholder="Password" autocomplete="current-password">
+            <button onclick="checkLogin()">Login</button>
+            <div id="errorMsg">Invalid username or password</div>
         </div>
-        <script src="js/qgis2web_expressions.js"></script>
-        <script src="js/leaflet.js"></script>
-        <script src="js/L.Control.Layers.Tree.min.js"></script>
-        <script src="js/L.Control.Locate.min.js"></script>
-        <script src="js/multi-style-layer.js"></script>
-        <script src="js/leaflet.rotatedMarker.js"></script>
-        <script src="js/leaflet.pattern.js"></script>
-        <script src="js/leaflet-hash.js"></script>
-        <script src="js/Autolinker.min.js"></script>
-        <script src="js/rbush.min.js"></script>
-        <script src="js/labelgun.min.js"></script>
-        <script src="js/labels.js"></script>
-        <script src="js/leaflet.photon.js"></script>
-        <script src="js/leaflet-measure.js"></script>
-        <script src="data/BingaWardsboundaries_2.js"></script>
-        <script src="data/MCCProjectSiteareas_3.js"></script>
-        <script src="data/MCCProjectSitepoints_4.js"></script>
-        <script>
+    </div>
+
+    <script>
+        (function () {
+            // Sistema de autenticação
+            window.__AUTH_OK__ = (sessionStorage.getItem('auth_ok') === '1');
+
+            function syncLoginUI() {
+                var scr = document.getElementById('loginScreen');
+                if (!scr) return;
+                if (window.__AUTH_OK__) {
+                    scr.style.display = 'none';
+                } else {
+                    scr.style.display = 'flex';
+                    var u = document.getElementById('user');
+                    if (u) u.focus();
+                }
+            }
+
+            window.checkLogin = function () {
+                const u = (document.getElementById("user").value || "").trim();
+                const p = (document.getElementById("pass").value || "").trim();
+                const ok = (u === "lincz" && p === "lincz2025");
+                if (ok) {
+                    sessionStorage.setItem('auth_ok', '1');
+                    window.__AUTH_OK__ = true;
+                    location.reload();
+                } else {
+                    document.getElementById("errorMsg").style.display = "block";
+                }
+            };
+
+            document.addEventListener('keydown', function (e) {
+                if (!window.__AUTH_OK__ && e.key === 'Enter') {
+                    checkLogin();
+                }
+            });
+
+            document.addEventListener('DOMContentLoaded', syncLoginUI);
+        })();
+    </script>
+
+    <div id="map"></div>
+    <script src="js/qgis2web_expressions.js"></script>
+    <script src="js/leaflet.js"></script>
+    <script src="js/L.Control.Layers.Tree.min.js"></script>
+    <script src="js/L.Control.Locate.min.js"></script>
+    <script src="js/multi-style-layer.js"></script>
+    <script src="js/leaflet.rotatedMarker.js"></script>
+    <script src="js/leaflet.pattern.js"></script>
+    <script src="js/leaflet-hash.js"></script>
+    <script src="js/Autolinker.min.js"></script>
+    <script src="js/rbush.min.js"></script>
+    <script src="js/labelgun.min.js"></script>
+    <script src="js/labels.js"></script>
+    <script src="js/leaflet.photon.js"></script>
+    <script src="js/leaflet-measure.js"></script>
+    <script src="data/BingaWardsboundaries_2.js"></script>
+    <script src="data/Bingatracks_3.js"></script>
+    <script src="data/BingaMCCProjectSiteareas_4.js"></script>
+    <script src="data/BingaMCCProjectSitepoints_5.js"></script>
+    <script>
         var map = L.map('map', {
-            zoomControl:false, maxZoom:23, minZoom:5
-        }).fitBounds([[-17.97988671906521,27.46832212989989],[-17.846951764729038,27.673688670166257]]);
+            zoomControl: false, maxZoom: 23, minZoom: 5
+        }).fitBounds([[-18.648033810015857, 26.464488231934016], [-17.42312464476019, 28.638892203549357]]);
         var hash = new L.Hash(map);
         map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
-        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        var autolinker = new Autolinker({ truncate: { length: 30, location: 'smart' } });
         // remove popup's row if "visible-with-data"
         function removeEmptyRowsFromPopupContent(content, feature) {
-         var tempDiv = document.createElement('div');
-         tempDiv.innerHTML = content;
-         var rows = tempDiv.querySelectorAll('tr');
-         for (var i = 0; i < rows.length; i++) {
-             var td = rows[i].querySelector('td.visible-with-data');
-             var key = td ? td.id : '';
-             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
-                 rows[i].parentNode.removeChild(rows[i]);
-             }
-         }
-         return tempDiv.innerHTML;
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var rows = tempDiv.querySelectorAll('tr');
+            for (var i = 0; i < rows.length; i++) {
+                var td = rows[i].querySelector('td.visible-with-data');
+                var key = td ? td.id : '';
+                if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                    rows[i].parentNode.removeChild(rows[i]);
+                }
+            }
+            return tempDiv.innerHTML;
         }
         // add class to format popup if it contains media
-		function addClassToPopupIfMedia(content, popup) {
-			var tempDiv = document.createElement('div');
-			tempDiv.innerHTML = content;
-			if (tempDiv.querySelector('td img')) {
-				popup._contentNode.classList.add('media');
-					// Delay to force the redraw
-					setTimeout(function() {
-						popup.update();
-					}, 10);
-			} else {
-				popup._contentNode.classList.remove('media');
-			}
-		}
-        var title = new L.Control({'position':'topright'});
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            if (tempDiv.querySelector('td img')) {
+                popup._contentNode.classList.add('media');
+                // Delay to force the redraw
+                setTimeout(function () {
+                    popup.update();
+                }, 10);
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var title = new L.Control({ 'position': 'topright' });
         title.onAdd = function (map) {
             this._div = L.DomUtil.create('div', 'info');
             this.update();
@@ -103,25 +204,25 @@
             this._div.innerHTML = '<h2>LINCZ Project: Binga fieldwork</h2>';
         };
         title.addTo(map);
-        var abstract = new L.Control({'position':'topright'});
+        var abstract = new L.Control({ 'position': 'topright' });
         abstract.onAdd = function (map) {
             this._div = L.DomUtil.create('div',
-            'leaflet-control abstract');
+                'leaflet-control abstract');
             this._div.id = 'abstract'
 
-                abstract.show();
-                return this._div;
-            };
-            abstract.show = function () {
-                this._div.classList.remove("abstract");
-                this._div.classList.add("abstractUncollapsed");
-                this._div.innerHTML = ' Last update: 2025-08-15';
+            abstract.show();
+            return this._div;
+        };
+        abstract.show = function () {
+            this._div.classList.remove("abstract");
+            this._div.classList.add("abstractUncollapsed");
+            this._div.innerHTML = ' Last update: 2025-08-15';
         };
         abstract.addTo(map);
         var zoomControl = L.control.zoom({
             position: 'topleft'
         }).addTo(map);
-        L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
+        L.control.locate({ locateOptions: { maxZoom: 19 } }).addTo(map);
         var measureControl = new L.Control.Measure({
             position: 'topleft',
             primaryLengthUnit: 'meters',
@@ -169,4 +270,289 @@
                     </tr>\
                     <tr>\
                         <th scope="row">Province</th>\
-                        <td class="visible-with-data" id="Province">'
+                        <td class="visible-with-data" id="Province">' + (feature.properties['Province'] !== null ? autolinker.link(String(feature.properties['Province']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">District</th>\
+                        <td class="visible-with-data" id="District">' + (feature.properties['District'] !== null ? autolinker.link(String(feature.properties['District']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Ward</th>\
+                        <td class="visible-with-data" id="Ward">' + (feature.properties['Ward'] !== null ? autolinker.link(String(feature.properties['Ward']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_BingaWardsboundaries_2_0() {
+            return {
+                pane: 'pane_BingaWardsboundaries_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 3.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+        }
+        map.createPane('pane_BingaWardsboundaries_2');
+        map.getPane('pane_BingaWardsboundaries_2').style.zIndex = 402;
+        map.getPane('pane_BingaWardsboundaries_2').style['mix-blend-mode'] = 'normal';
+        var layer_BingaWardsboundaries_2 = new L.geoJson(json_BingaWardsboundaries_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_BingaWardsboundaries_2',
+            layerName: 'layer_BingaWardsboundaries_2',
+            pane: 'pane_BingaWardsboundaries_2',
+            onEachFeature: pop_BingaWardsboundaries_2,
+            style: style_BingaWardsboundaries_2_0,
+        });
+        bounds_group.addLayer(layer_BingaWardsboundaries_2);
+        map.addLayer(layer_BingaWardsboundaries_2);
+        function pop_Bingatracks_3(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['name'] !== null ? autolinker.link(String(feature.properties['name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['Length'] !== null ? autolinker.link(String(feature.properties['Length']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <td colspan="2">' + (feature.properties['km_total'] !== null ? autolinker.link(String(feature.properties['km_total']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Bingatracks_3_0() {
+            return {
+                pane: 'pane_Bingatracks_3',
+                opacity: 1,
+                color: 'rgba(0,0,0,1.0)',
+                dashArray: '',
+                lineCap: 'round',
+                lineJoin: 'round',
+                weight: 3.0,
+                fillOpacity: 0,
+                interactive: false,
+            }
+        }
+        function style_Bingatracks_3_1() {
+            return {
+                pane: 'pane_Bingatracks_3',
+                opacity: 1,
+                color: 'rgba(236,227,196,1.0)',
+                dashArray: '',
+                lineCap: 'round',
+                lineJoin: 'round',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: false,
+            }
+        }
+        map.createPane('pane_Bingatracks_3');
+        map.getPane('pane_Bingatracks_3').style.zIndex = 403;
+        map.getPane('pane_Bingatracks_3').style['mix-blend-mode'] = 'normal';
+        var layer_Bingatracks_3 = new L.geoJson.multiStyle(json_Bingatracks_3, {
+            attribution: '',
+            interactive: false,
+            dataVar: 'json_Bingatracks_3',
+            layerName: 'layer_Bingatracks_3',
+            pane: 'pane_Bingatracks_3',
+            onEachFeature: pop_Bingatracks_3,
+            styles: [style_Bingatracks_3_0, style_Bingatracks_3_1,]
+        });
+        bounds_group.addLayer(layer_Bingatracks_3);
+        map.addLayer(layer_Bingatracks_3);
+        function pop_BingaMCCProjectSiteareas_4(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">Name</th>\
+                        <td class="visible-with-data" id="Name">' + (feature.properties['Name'] !== null ? autolinker.link(String(feature.properties['Name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Total area (m2)</th>\
+                        <td class="visible-with-data" id="Total_area">' + (feature.properties['Total_area'] !== null ? autolinker.link(String(feature.properties['Total_area']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Total area (km2)</th>\
+                        <td class="visible-with-data" id="Total_area_1">' + (feature.properties['Total_area_1'] !== null ? autolinker.link(String(feature.properties['Total_area_1']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Elevation(m)</th>\
+                        <td class="visible-with-data" id="Elevation">' + (feature.properties['Elevation'] !== null ? autolinker.link(String(feature.properties['Elevation']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Ward</th>\
+                        <td class="visible-with-data" id="Ward">' + (feature.properties['Ward'] !== null ? autolinker.link(String(feature.properties['Ward']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        var pattern_BingaMCCProjectSiteareas_4_0 = new L.StripePattern({
+            weight: 0.3,
+            spaceWeight: 2.0,
+            color: '#000000',
+            opacity: 1.0,
+            spaceOpacity: 0,
+            angle: 225
+        });
+        pattern_BingaMCCProjectSiteareas_4_0.addTo(map);
+        function style_BingaMCCProjectSiteareas_4_0() {
+            return {
+                pane: 'pane_BingaMCCProjectSiteareas_4',
+                stroke: false,
+                fillOpacity: 1,
+                fillPattern: pattern_BingaMCCProjectSiteareas_4_0,
+                interactive: true,
+            }
+        }
+        function style_BingaMCCProjectSiteareas_4_1() {
+            return {
+                pane: 'pane_BingaMCCProjectSiteareas_4',
+                opacity: 1,
+                color: 'rgba(0,0,0,1.0)',
+                dashArray: '',
+                lineCap: 'square',
+                lineJoin: 'bevel',
+                weight: 2.0,
+                fillOpacity: 0,
+                interactive: true,
+            }
+        }
+        map.createPane('pane_BingaMCCProjectSiteareas_4');
+        map.getPane('pane_BingaMCCProjectSiteareas_4').style.zIndex = 404;
+        map.getPane('pane_BingaMCCProjectSiteareas_4').style['mix-blend-mode'] = 'normal';
+        var layer_BingaMCCProjectSiteareas_4 = new L.geoJson.multiStyle(json_BingaMCCProjectSiteareas_4, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_BingaMCCProjectSiteareas_4',
+            layerName: 'layer_BingaMCCProjectSiteareas_4',
+            pane: 'pane_BingaMCCProjectSiteareas_4',
+            onEachFeature: pop_BingaMCCProjectSiteareas_4,
+            styles: [style_BingaMCCProjectSiteareas_4_0, style_BingaMCCProjectSiteareas_4_1,]
+        });
+        bounds_group.addLayer(layer_BingaMCCProjectSiteareas_4);
+        map.addLayer(layer_BingaMCCProjectSiteareas_4);
+        function pop_BingaMCCProjectSitepoints_5(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">Elevation(m)</th>\
+                        <td class="visible-with-data" id="Elevation">' + (feature.properties['Elevation'] !== null ? autolinker.link(String(feature.properties['Elevation']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Time</th>\
+                        <td class="visible-with-data" id="Time">' + (feature.properties['Time'] !== null ? autolinker.link(String(feature.properties['Time']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Name</th>\
+                        <td class="visible-with-data" id="Name">' + (feature.properties['Name'] !== null ? autolinker.link(String(feature.properties['Name']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Ward</th>\
+                        <td class="visible-with-data" id="Ward">' + (feature.properties['Ward'] !== null ? autolinker.link(String(feature.properties['Ward']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+            layer.on('popupopen', function (e) {
+                addClassToPopupIfMedia(content, e.popup);
+            });
+            layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_BingaMCCProjectSitepoints_5_0() {
+            return {
+                pane: 'pane_BingaMCCProjectSitepoints_5',
+                radius: 3.6,
+                opacity: 1,
+                color: 'rgba(83,83,83,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 2.0,
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(238,13,37,1.0)',
+                interactive: true,
+            }
+        }
+        map.createPane('pane_BingaMCCProjectSitepoints_5');
+        map.getPane('pane_BingaMCCProjectSitepoints_5').style.zIndex = 405;
+        map.getPane('pane_BingaMCCProjectSitepoints_5').style['mix-blend-mode'] = 'normal';
+        var layer_BingaMCCProjectSitepoints_5 = new L.geoJson(json_BingaMCCProjectSitepoints_5, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_BingaMCCProjectSitepoints_5',
+            layerName: 'layer_BingaMCCProjectSitepoints_5',
+            pane: 'pane_BingaMCCProjectSitepoints_5',
+            onEachFeature: pop_BingaMCCProjectSitepoints_5,
+            pointToLayer: function (feature, latlng) {
+                var context = {
+                    feature: feature,
+                    variables: {}
+                };
+                return L.circleMarker(latlng, style_BingaMCCProjectSitepoints_5_0(feature));
+            },
+        });
+        bounds_group.addLayer(layer_BingaMCCProjectSitepoints_5);
+        map.addLayer(layer_BingaMCCProjectSitepoints_5);
+        var overlaysTree = [
+            { label: '<img src="legend/BingaMCCProjectSitepoints_5.png" /> Binga MCC Project Site points', layer: layer_BingaMCCProjectSitepoints_5 },
+            { label: '<img src="legend/BingaMCCProjectSiteareas_4.png" /> Binga MCC Project Site areas', layer: layer_BingaMCCProjectSiteareas_4 },
+            { label: '<img src="legend/Bingatracks_3.png" /> Binga tracks', layer: layer_Bingatracks_3 },
+            { label: '<img src="legend/BingaWardsboundaries_2.png" /> Binga Wards boundaries', layer: layer_BingaWardsboundaries_2 },
+            { label: "Google Labels", layer: layer_GoogleLabels_1 },
+            { label: "Google Satellite", layer: layer_GoogleSatellite_0 },]
+        var lay = L.control.layers.tree(null, overlaysTree, {
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: true,
+        });
+        lay.addTo(map);
+        setBounds();
+        var i = 0;
+        layer_BingaWardsboundaries_2.eachLayer(function (layer) {
+            var context = {
+                feature: layer.feature,
+                variables: {}
+            };
+            layer.bindTooltip((layer.feature.properties['Ward'] !== null ? String('<div style="color: #323232; font-size: 12pt; font-weight: bold; font-family: \'Open Sans\', sans-serif;">' + layer.feature.properties['Ward']) + '</div>' : ''), { permanent: true, offset: [-0, -16], className: 'css_BingaWardsboundaries_2' });
+            labels.push(layer);
+            totalMarkers += 1;
+            layer.added = true;
+            addLabel(layer, i);
+            i++;
+        });
+        resetLabels([layer_BingaWardsboundaries_2]);
+        map.on("zoomend", function () {
+            resetLabels([layer_BingaWardsboundaries_2]);
+        });
+        map.on("layeradd", function () {
+            resetLabels([layer_BingaWardsboundaries_2]);
+        });
+        map.on("layerremove", function () {
+            resetLabels([layer_BingaWardsboundaries_2]);
+        });
+    </script>
+</body>
+
+</html>
